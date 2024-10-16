@@ -1,9 +1,9 @@
 import { Checkbox } from '@/components/ui/checkbox';
 import { ColumnDef } from '@tanstack/react-table';
 import { CellAction } from './cell-action';
-import { Employee } from '@/components/constants/data';
+import { Menu } from '@/types/menu';
 
-export const columns: ColumnDef<Employee>[] = [
+export const columns: ColumnDef<Menu>[] = [
   {
     id: 'select',
     header: ({ table }) => (
@@ -12,38 +12,42 @@ export const columns: ColumnDef<Employee>[] = [
         onCheckedChange={(value: any) =>
           table.toggleAllPageRowsSelected(!!value)
         }
-        aria-label="Select all"
+        aria-label="全选"
       />
     ),
     cell: ({ row }) => (
       <Checkbox
         checked={row.getIsSelected()}
         onCheckedChange={(value:any) => row.toggleSelected(!!value)}
-        aria-label="Select row"
+        aria-label="选择行"
       />
     ),
     enableSorting: false,
     enableHiding: false
   },
   {
-    accessorKey: 'first_name',
-    header: 'NAME'
+    accessorKey: 'name',
+    header: '名称'
   },
   {
-    accessorKey: 'country',
-    header: 'COUNTRY'
+    accessorKey: 'code',
+    header: '代码'
   },
   {
-    accessorKey: 'email',
-    header: 'EMAIL'
+    accessorKey: 'path',
+    header: '路径'
   },
   {
-    accessorKey: 'job',
-    header: 'COMPANY'
+    accessorKey: 'type',
+    header: '类型'
   },
   {
-    accessorKey: 'gender',
-    header: 'GENDER'
+    accessorKey: 'status',
+    header: '状态'
+  },
+  {
+    accessorKey: 'sequence',
+    header: '序列'
   },
   {
     id: 'actions',

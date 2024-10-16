@@ -1,16 +1,15 @@
 import {
   ColumnDef,
   PaginationState,
-  flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
-  useReactTable
+  useReactTable,
+  flexRender
 } from '@tanstack/react-table';
-import React from 'react';
+import React, { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -30,36 +29,53 @@ import {
   DoubleArrowLeftIcon,
   DoubleArrowRightIcon
 } from '@radix-ui/react-icons';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon as ChevronRightIconLucide, Plus, Edit, Trash } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import RoleForm from '@/pages/roleManager/form';
+import { deleteRole } from '@/apis/role';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  searchKey: string;
   pageNo: number;
-  totalUsers: number;
+  totalRoles: number;
   pageSizeOptions?: number[];
   pageCount: number;
   searchParams?: {
     [key: string]: string | string[] | undefined;
   };
+  refreshData: () => Promise<void>;
 }
 
-export function EmployeeTable<TData, TValue>({
+export function RoleTable<TData, TValue>({
   columns,
   data,
   pageNo,
-  searchKey,
-  totalUsers,
+  totalRoles,
   pageCount,
-  pageSizeOptions = [10, 20, 30, 40, 50]
+  pageSizeOptions = [10, 20, 30, 40, 50],
+  refreshData
 }: DataTableProps<TData, TValue>) {
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  // Search params
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<'create' | 'update'>('create');
+  const [selectedRole, setSelectedRole] = useState<any>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [roleToDelete, setRoleToDelete] = useState<string | null>(null);
+
+  // 搜索参数
   const page = searchParams.get('page') ?? '1';
   const pageAsNumber = Number(page);
   const fallbackPage =
@@ -68,10 +84,7 @@ export function EmployeeTable<TData, TValue>({
   const perPageAsNumber = Number(per_page);
   const fallbackPerPage = isNaN(perPageAsNumber) ? 10 : perPageAsNumber;
 
-  /* this can be used to get the selectedrows 
-  console.log("value", table.getFilteredSelectedRowModel()); */
-
-  // Create query string
+  // 创建查询字符串
   const createQueryString = React.useCallback(
     (params: Record<string, string | number | null>) => {
       const newSearchParams = new URLSearchParams(searchParams.toString());
@@ -89,7 +102,7 @@ export function EmployeeTable<TData, TValue>({
     [searchParams]
   );
 
-  // Handle server-side pagination
+  // 处理服务器端分页
   const [{ pageIndex, pageSize }, setPagination] =
     React.useState<PaginationState>({
       pageIndex: fallbackPage - 1,
@@ -108,7 +121,7 @@ export function EmployeeTable<TData, TValue>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageIndex, pageSize]);
 
-  const table = useReactTable({
+  const table = useReactTable<any>({
     data,
     columns,
     pageCount: pageCount ?? -1,
@@ -123,47 +136,54 @@ export function EmployeeTable<TData, TValue>({
     manualFiltering: true
   });
 
-  const searchValue = table.getColumn(searchKey)?.getFilterValue() as string;
+  const handleAddRole = () => {
+    setModalType('create');
+    setSelectedRole(null);
+    setIsModalOpen(true);
+  };
 
-  React.useEffect(() => {
-    if (searchValue?.length > 0) {
-      navigate(
-        `${location.pathname}?${createQueryString({
-          page: null,
-          limit: null,
-          search: searchValue
-        })}`,
-        { replace: true }
-      );
+  const handleEditRole = (role: any) => {
+    setModalType('update');
+    setSelectedRole(role);
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedRole(null);
+  };
+
+  const handleSuccess = async () => {
+    // 刷新数据
+    await refreshData();
+  };
+
+  const handleDeleteRole = async (id: string) => {
+    try {
+      await deleteRole(id);
+      toast.success('角色删除成功');
+      await refreshData();
+    } catch (error) {
+      console.error('删除角色失败:', error);
     }
-    if (searchValue?.length === 0 || searchValue === undefined) {
-      navigate(
-        `${location.pathname}?${createQueryString({
-          page: null,
-          limit: null,
-          search: null
-        })}`,
-        { replace: true }
-      );
-    }
+    setIsDeleteDialogOpen(false);
+    setRoleToDelete(null);
+  };
 
-    setPagination((prev) => ({ ...prev, pageIndex: 0 }));
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchValue]);
+  const openDeleteDialog = (id: string) => {
+    setRoleToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
 
   return (
     <>
-      <Input
-        placeholder={`搜索 ${searchKey}...`}
-        value={(table.getColumn(searchKey)?.getFilterValue() as string) ?? ''}
-        onChange={(event) =>
-          table.getColumn(searchKey)?.setFilterValue(event.target.value)
-        }
-        className="w-full md:max-w-sm"
-      />
+      <div className="flex justify-end items-center mb-4">
+        <Button onClick={handleAddRole}>
+          <Plus className="mr-2 h-4 w-4" /> 新增角色
+        </Button>
+      </div>
       <ScrollArea className="h-[calc(80vh-220px)] rounded-md border">
-        <Table className="relative">
+        <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
@@ -177,8 +197,9 @@ export function EmployeeTable<TData, TValue>({
                             header.getContext()
                           )}
                     </TableHead>
-                  );
+                  )
                 })}
+                <TableHead>操作</TableHead>
               </TableRow>
             ))}
           </TableHeader>
@@ -187,24 +208,28 @@ export function EmployeeTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
+                  data-state={row.getIsSelected() && "selected"}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
+                  <TableCell>
+                    <Button variant="outline" size="sm" onClick={() => handleEditRole(row.original)}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      修改
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => openDeleteDialog(row.original.id)} className="ml-2">
+                      <Trash className="mr-2 h-4 w-4" />
+                      删除
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
+                <TableCell colSpan={columns.length + 1} className="h-24 text-center">
                   没有结果。
                 </TableCell>
               </TableRow>
@@ -217,8 +242,7 @@ export function EmployeeTable<TData, TValue>({
       <div className="flex flex-col items-center justify-end gap-2 space-x-2 py-4 sm:flex-row">
         <div className="flex w-full items-center justify-between">
           <div className="flex-1 text-sm text-muted-foreground">
-            已选择 {table.getFilteredSelectedRowModel().rows.length} 行，共{' '}
-            {table.getFilteredRowModel().rows.length} 行。
+            共 {table.getFilteredRowModel().rows.length} 行。
           </div>
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:gap-6 lg:gap-8">
             <div className="flex items-center space-x-2">
@@ -278,7 +302,7 @@ export function EmployeeTable<TData, TValue>({
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
             >
-              <ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
+              <ChevronRightIconLucide className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               aria-label="转到最后一页"
@@ -292,6 +316,33 @@ export function EmployeeTable<TData, TValue>({
           </div>
         </div>
       </div>
+
+      <RoleForm
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        type={modalType}
+        initialData={selectedRole}
+        onSuccess={handleSuccess}
+      />
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+            <DialogDescription>
+              确定要删除此角色吗？此操作无法撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={() => roleToDelete && handleDeleteRole(roleToDelete)}>
+              确定
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

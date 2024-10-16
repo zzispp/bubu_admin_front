@@ -11,9 +11,10 @@ import {
 import { Edit, MoreHorizontal, Trash } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { Menu } from '@/types/menu';
 
 interface CellActionProps {
-  data: Employee;
+  data: Menu;
 }
 
 export const CellAction: React.FC<CellActionProps> = ({ data }) => {

@@ -1,46 +1,15 @@
-import React, { lazy, Suspense, useMemo } from 'react';
-import { BrowserRouter, useRoutes, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import React, { lazy, Suspense, useMemo, useEffect, useState } from 'react';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import { userStore } from '@/stores/user';
 import { Loader2 } from 'lucide-react';
-import MenuManager from '@/pages/menuManager';
+import Login from '@/pages/login';
+import Register from '@/pages/register';
+import DashboardLayout from '@/layouts/dashboard';
+import Home from '@/pages/home';
+import NotFound from '@/pages/not-found';
 
 // 动态导入组件
-const modules = import.meta.glob("../pages/**/*.tsx") as any;
-// 动态导入layouts
-const layouts = import.meta.glob("../layouts/**/*.tsx") as any;
-console.log(layouts)
-// 静态导入组件
-const Login = lazy(() => import('@/pages/login'));
-const Register = lazy(() => import('@/pages/register'));
-const Home = lazy(() => import('@/pages/home'));
-
-// 路由配置数组
-const staticRoutes = [
-    {
-        path: '/',
-        element: <Home />,
-    },
-    {
-        path: '/login',
-        element: <Login />,
-    },
-    {
-        path: '/register',
-        element: <Register />,
-    },
-    {
-        path: '/404',
-        element: <div>404</div>,
-    },
-    {
-        path: '*',
-        element: <Navigate to="/404" replace />,
-    },
-    {
-        path: '/menu',
-        element:<MenuManager/>
-    }
-];
+const modules = import.meta.glob("../pages/**/*.tsx");
 
 const LoadingSpinner = React.memo(() => (
     <div className="flex items-center justify-center h-screen">
@@ -48,82 +17,147 @@ const LoadingSpinner = React.memo(() => (
     </div>
 ));
 
-const Routes: React.FC = () => {
-    const { user, token, getProfile } = userStore();
-    const navigate = useNavigate();
-    const location = useLocation();
-
-    // 每次渲染时获取最新的用户信息
-    React.useEffect(() => {
-        const fetchProfile = async () => {
-            if (token) {
-                await getProfile();
-                if (location.pathname === '/login' || location.pathname === '/register') {
-                    navigate('/dashboard');
-                }
-            }
-        };
-        fetchProfile();
-    }, [token, getProfile, navigate, location.pathname]);
-
-    const renderElement = useMemo(() => (route: any) => (
-        <Suspense fallback={<LoadingSpinner />}>
-            {React.createElement(lazy(() => {
-                if (route.component) {
-                    const componentPath = route.component;
-                    console.log("componentPath", `../layouts/${componentPath.split('/').slice(1).join('/')}/index.tsx`);
-                    if (componentPath.startsWith('pages/') && modules[`../pages/${componentPath.split('/').slice(1).join('/')}/index.tsx`]) {
-                        return modules[`../pages/${componentPath.split('/').slice(1).join('/')}/index.tsx`]();
-                    } else if (componentPath.startsWith('layouts/') && layouts[`../layouts/${componentPath.split('/').slice(1).join('/')}/index.tsx`]) {
-                        return layouts[`../layouts/${componentPath.split('/').slice(1).join('/')}/index.tsx`]();
-                    }
-                }
-                return Promise.resolve({ default: () => <div className='w-full h-full flex items-center justify-center'>未匹配到组件，请检查菜单组件路径是否有误</div> });
-            }))}
-        </Suspense>
-    ), []);
-
-    const generateRouter = useMemo(() => (item: any) => {
-        const router: any = {
-            path: item.path,
-            element: renderElement(item),
-        };
-
-        if (item.redirect) {
-            router.children = [
-                {
-                    index: true,
-                    element: <Navigate to={item.redirect} replace />
-                }
-            ];
-        }
-
-        if (item.children) {
-            router.children = [...(router.children || []), ...item.children.map((child: any) => generateRouter({
-                ...child,
-                path: `${item.path}${child.path}`
-            }))];
-        }
-
-        return router;
-    }, [renderElement]);
-
-    const dynamicRoutes = useMemo(() => user?.menus ? user.menus.map((item: any) => generateRouter(item)) : [], [user?.menus, generateRouter]);
-
-    // 将动态路由添加到顶层路由中
-    const allRoutes = useMemo(() => [...staticRoutes, ...dynamicRoutes], [dynamicRoutes]);
-    console.log("allRoutes", allRoutes);
-    const element = useRoutes(allRoutes);
-
-    return element;
-};
 
 const DynamicRouter: React.FC = () => {
-    return (
-        <BrowserRouter>
-            <Routes />
-        </BrowserRouter>
-    );
+    const { user, token, getProfile } = userStore();
+    const [components, setComponents] = useState<Map<string, any>>(new Map());
+    const [router, setRouter] = useState<any>(null);
+
+    // 获取用户信息和菜单数据
+    useEffect(() => {
+        const fetchData = async () => {
+            if (token) {
+                await getProfile();
+            }
+        };
+        fetchData();
+    }, [token, getProfile]);
+
+    // 动态加载组件
+    useEffect(() => {
+        const loadComponents = async () => {
+            const componentMap = new Map<string, any>();
+            const loadComponent = async (menu: any, parentPath = '') => {
+                const fullPath = `${parentPath}${menu.path}`;
+                if (menu.component && menu.component !== 'Layout') {
+                    let componentModule;
+                    if (menu.component.startsWith('pages/') && modules[`../pages/${menu.component.split('/').slice(1).join('/')}/index.tsx`]) {
+                        componentModule = () => modules[`../pages/${menu.component.split('/').slice(1).join('/')}/index.tsx`]();
+                    } 
+
+                    if (componentModule) {
+                        const component = lazy(() => componentModule().then((module: any) => ({ default: module.default })));
+                        componentMap.set(fullPath, component);
+                    } else {
+                        const NotFoundComponent = () => <div>组件未找到: {menu.component}</div>;
+                        componentMap.set(fullPath, NotFoundComponent);
+                        console.warn(`找不到组件: ${menu.component}，已创建默认组件`);
+                    }
+                }
+                if (menu.children) {
+                    for (const child of menu.children) {
+                        await loadComponent(child, fullPath);
+                    }
+                }
+            };
+            if (user?.menus) {
+                for (const menu of user.menus) {
+                    await loadComponent(menu);
+                }
+            }
+            setComponents(componentMap);
+        };
+        loadComponents();
+    }, [user?.menus]);
+
+    // 生成路由配置
+    const generateRouter = useMemo(() => {
+        const generateRouterRecursive = (item: any, parentPath = ''): any => {
+            const itemPath = item.path.startsWith('/') ? item.path.slice(1) : item.path;
+            const fullPath = `${parentPath}/${itemPath}`.replace(/\/+/g, '/');
+            
+            const router: any = {
+                path: itemPath,
+                element: components.get(fullPath) ? 
+                    <Suspense fallback={<LoadingSpinner />}>
+                        {React.createElement(components.get(fullPath))}
+                    </Suspense> : 
+                    null,
+            };
+
+            if (item.redirect) {
+                router.children = [
+                    { index: true, element: <Navigate to={item.redirect} replace /> }
+                ];
+            }
+
+            if (item.children) {
+                router.children = [
+                    ...(router.children || []),
+                    ...item.children.map((child: any) => generateRouterRecursive(child, fullPath))
+                ];
+            }
+
+            return router;
+        };
+
+        return generateRouterRecursive;
+    }, [components]);
+
+    // 创建路由
+    useEffect(() => {
+        const baseRoutes = [
+            {
+                path: '/login',
+                element: <Login />,
+            },
+            {
+                path: '/register',
+                element: <Register />,
+            },
+            {
+                path: '/404',
+                element: <NotFound />,
+            },
+            {
+                path: '*',
+                element: <Navigate to="/404" replace />,
+            },
+        ];
+
+        let routes;
+        if (token && user?.menus && user.menus.length > 0) {
+            const dynamicRoutes = user.menus.map(menu => generateRouter(menu, ''));
+            routes = [
+                {
+                    path: '/',
+                    element: <DashboardLayout />,
+                    children: [
+                        { index: true, element: dynamicRoutes[0] ? <Navigate to={dynamicRoutes[0].path} replace /> : <Navigate to="/404" replace /> },
+                        ...dynamicRoutes,
+                    ],
+                },
+                ...baseRoutes,
+            ];
+        } else {
+            routes = [
+                {
+                    path: '/',
+                    element: <Home />,
+                },
+                ...baseRoutes,
+            ];
+        }
+        
+        const newRouter = createBrowserRouter(routes);
+        setRouter(newRouter);
+    }, [components, user?.menus, generateRouter, token]);
+
+    if (!router) {
+        return <LoadingSpinner />;
+    }
+
+    return <RouterProvider router={router} />;
 };
 
 export default DynamicRouter;

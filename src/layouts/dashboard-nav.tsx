@@ -8,7 +8,7 @@ import {
   PopoverTrigger
 } from '@/components/ui/popover';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu } from '@/types/user';
+import { Menu } from '@/types/menu';
 import { ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 

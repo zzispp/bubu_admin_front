@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useState } from "react";
 import { userStore } from "@/stores/user";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const Login = () => {
     const [formState, setFormState] = useState({
@@ -12,7 +12,7 @@ const Login = () => {
         password: ""
     });
     const login = userStore((state) => state.login);
-
+    const navigate = useNavigate();
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setFormState(prevState => ({
@@ -21,16 +21,23 @@ const Login = () => {
         }));
     };
 
-    const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
-        toast.promise(
-            login(formState.email, formState.password),
-            {
-                loading: '登录中...',
-                success: '登录成功',
-            }
-        );
+        try {
+            await toast.promise(
+                login(formState.email, formState.password),
+                {
+                    loading: '登录中...',
+                    success: '登录成功',
+                }
+            );
+            // 登录成功后跳转到首页
+            navigate('/');
+        } catch (error: any) {
+            // 处理登录失败的情况
+            toast.error('登录失败：' + error.message);
+        }
     };
 
     return (
