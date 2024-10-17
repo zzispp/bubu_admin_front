@@ -7,7 +7,7 @@ type LogoProps = {
   showText?: boolean;
 } & React.HTMLAttributes<SVGElement>;
 
-const Logo: React.FC<LogoProps> = ({ size = 35, fontSize = 'text-xl', text = 'PuPu 加密支付系统', showText = true, ...props }) => {
+const Logo: React.FC<LogoProps> = ({ size = 35, fontSize = 'text-xl', text = 'PuPu Admin', showText = true, ...props }) => {
   return (
     <div className="flex items-center">
       <svg
